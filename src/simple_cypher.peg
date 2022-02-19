@@ -1,0 +1,432 @@
+//
+// a simple cypher definition
+// NB. this is not the complete open cypher grammar.
+//
+
+Cypher = {
+	Statement ~ (";")? ~ EOI
+}
+
+Statement = {
+	SingleQuery
+| StandaloneCall
+}
+
+SingleQuery = {
+	(ReadingClause)* ~ ReturningClause
+| (ReadingClause)* ~ (UpdatingClause)+ ~ (ReturningClause)?
+}
+
+StandaloneCall = {
+	WordCall ~ ExplicitProcedureInvocation ~ (WordYield ~ YieldItems)?
+}
+
+//
+// update clause
+// read clause
+// return clause
+//
+UpdatingClause = {
+	CreateClause
+| DeleteClause
+}
+
+ReadingClause = {
+	MatchClause
+| InQueryCallClause
+}
+
+ReturningClause = {
+	WordReturn ~ ProjectionBody
+}
+
+CreateClause = {
+	WordCreate ~ Pattern
+}
+
+DeleteClause = {
+	WordDelete
+~ Expression
+~ ("," ~ Expression)*
+}
+
+MatchClause = {
+	WordMatch ~ Pattern ~ (WhereClausePart)?
+}
+
+InQueryCallClause = {
+	WordCall
+~ ExplicitProcedureInvocation
+~ (WordYield ~ YieldItems)?
+}
+
+ExplicitProcedureInvocation = {
+	ProcedureName
+~ "("
+~ (Expression ~ ("," ~ Expression)*)?
+~ ")"
+}
+
+YieldItems = {
+	YieldItemsPart ~ (WhereClausePart)?
+}
+
+YieldItemsPart = {
+	"*"
+| YieldItem ~ ("," ~ YieldItem)*
+}
+
+YieldItem = {
+	(ProcedureResultField ~ WordAs)? ~ Variable
+}
+
+ProjectionBody = {
+	ProjectionItems ~ (Order)? ~ (Skip)? ~ (Limit)?
+}
+
+ProjectionItems = {
+	"*" ~ ("," ~ ProjectionItem)*
+| ProjectionItem ~ ("," ~ ProjectionItem)*
+}
+
+ProjectionItem = {
+	(Expression ~ WordAs ~ Variable)
+| Expression
+}
+
+Order = {
+	WordOrder ~ WordBy ~ SortItem ~ ("," ~ SortItem)*
+}
+
+SortItem = {
+	Expression ~ ("ASC" | "DESC")
+}
+
+Skip = {
+	WordSkip ~ Expression
+}
+
+Limit = {
+	WordLimit ~ Expression
+}
+
+//
+// pattern definitions
+//
+Pattern = {
+	PatternPart ~ ("," ~ PatternPart)*
+}
+
+PatternPart = {
+	(Variable ~ "=" ~ AnonymousPatternPart)
+| AnonymousPatternPart
+}
+
+AnonymousPatternPart = { PatternElement }
+
+PatternElement = {
+	NodePattern ~ (PatternElementChain)*
+| ("(" ~ PatternElement ~ ")")
+}
+
+
+//
+// expression definitions
+//
+Expression = { OrExpression }
+
+OrExpression = { XorExpression ~ (^"or" ~ XorExpression)* }
+
+XorExpression = { AndExpression ~ (^"xor" ~ AndExpression)* }
+
+AndExpression = { NotExpression ~ (^"and" ~ NotExpression)* }
+
+NotExpression = { (^"not")? ~ ComparisonExpression }
+
+ComparisonExpression = { AddOrSubtractExpression ~ (PartialComparisonExpression)* }
+
+AddOrSubtractExpression = {
+  MultiplyDivideModuloExpression ~ (
+      "+" ~ MultiplyDivideModuloExpression
+    | "-" ~ MultiplyDivideModuloExpression
+  )*
+}
+
+MultiplyDivideModuloExpression = {
+  PowerOfExpression ~ (
+    "*" ~ PowerOfExpression
+    | "/" ~ PowerOfExpression
+    | "%" ~ PowerOfExpression
+  )*
+}
+
+PowerOfExpression = {
+  UnaryAddOrSubtractExpression ~ ("^" ~ UnaryAddOrSubtractExpression)*
+}
+
+UnaryAddOrSubtractExpression = {
+  ("+" | "-")? ~ StringListNullOperatorExpression
+}
+
+StringListNullOperatorExpression = {
+  PropertyOrLabelsExpression ~ (
+    StringOperatorExpression | ListOperatorExpression | NullOperatorExpression
+  )*
+}
+
+StringOperatorExpression = {
+  (StringOperator) ~ PropertyOrLabelsExpression
+}
+
+StringOperator = {
+ ^"start" ~ ^"with"
+| ^"end" ~ ^"with"
+| ^"contains"
+}
+
+ListOperatorExpression = {
+  ^"in" ~ PropertyOrLabelsExpression
+| "[" ~ Expression ~ "]"
+| "[" ~ (Expression)? ~ ".." ~ (Expression)? ~ "]"
+}
+
+NullOperatorExpression = {
+  ^"is" ~ NullLiteral
+| ^"is" ~ ^"not" ~ NullLiteral
+}
+
+PropertyOrLabelsExpression = {
+  Atom ~ (PropertyLookup)* ~ (NodeLabels)?
+}
+
+Atom = {
+  Literal
+| Variable
+| ParenthesizedExpression
+| PatternComprehension
+| RelationshipsPattern
+}
+
+
+PatternComprehension = {
+  "["
+  ~ (Variable ~ '=')?
+  ~ RelationshipsPattern
+  ~ (WhereClausePart)?
+  ~ "|"
+  ~ Expression
+  ~ "]"
+}
+
+WhereClausePart = {
+	WordWhere ~ Expression
+}
+
+RelationshipsPattern = {
+  NodePattern ~ (PatternElementChain)+
+}
+
+PatternElementChain = { RelationshipPattern ~ NodePattern }
+
+RelationshipPattern = {
+	LeftArrowHead ~ Dash ~ (RelationshipDetail)? ~ Dash ~ RightArrowHead
+| LeftArrowHead ~ Dash ~ (RelationshipDetail)? ~ Dash
+| Dash ~ (RelationshipDetail)? ~ Dash ~ RightArrowHead
+| Dash ~ (RelationshipDetail)? ~ Dash
+}
+
+RelationshipDetail = {
+	"["
+~ (Variable)?
+~ (RelationshipTypes)?
+~ (Properties)?
+~ "]"
+}
+
+RelationshipTypes = {
+	":" ~ RelTypeName ~ ("|" ~ (":")? ~ RelTypeName)*
+}
+
+NodePattern = {
+  "(" ~ (Variable)? ~ (NodeLabels)? ~ (Properties)? ~ ")"
+}
+
+ParenthesizedExpression = {
+  "(" ~ Expression ~ ")"
+}
+
+NodeLabels = {
+  NodeLabel ~ (NodeLabel)*
+}
+
+NodeLabel = { ":" ~ LabelName }
+
+PropertyLookup = {
+ "." ~ PropertyKeyName
+}
+
+Properties = { MapLiteral }
+
+PartialComparisonExpression = {
+ "=" ~ AddOrSubtractExpression
+| "==" ~ AddOrSubtractExpression
+| "<>" ~ AddOrSubtractExpression
+| "!=" ~ AddOrSubtractExpression
+| ">" ~ AddOrSubtractExpression
+| "<" ~ AddOrSubtractExpression
+| ">=" ~ AddOrSubtractExpression
+| "<=" ~ AddOrSubtractExpression
+}
+
+Literal = {
+  StringLiteral
+| BooleanLiteral
+| NumberLiteral
+| NullLiteral
+| MapLiteral
+}
+
+MapLiteral = {
+  "{" ~ (MapLiteralPart ~ ("," ~ MapLiteralPart)*)? ~ "}"
+}
+
+MapLiteralPart = {
+  PropertyKeyName ~ ":" ~ Expression
+}
+
+NullLiteral = { ^"NULL" }
+
+StringLiteral = {
+  ("'" ~ QuotedCharacter1* ~ "'")
+| ("\"" ~ QuotedCharacter2* ~ "\"")
+}
+
+QuotedCharacter1 = _{ !"'" ~ ANY }
+QuotedCharacter2 = _{ !"\"" ~ ANY }
+
+BooleanLiteral = {
+  ^"true" | ^"false"
+}
+
+NumberLiteral = {
+  DoubleLiteral
+| IntegerLiteral
+}
+
+DoubleLiteral = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT* }
+IntegerLiteral = @{ "-"? ~ ASCII_DIGIT+ }
+
+Namespace = @{ SymbolicName ~ "." }
+
+ProcedureName = { (Namespace)? ~ SymbolicName }
+
+ProcedureResultField = { SymbolicName }
+
+RelTypeName = { SymbolicName }
+
+PropertyKeyName = { SymbolicName }
+
+LabelName = { SymbolicName }
+
+Variable = { SymbolicName }
+
+SymbolicName = @{ !ReservedWord ~ AnyWord | ReservedWord ~ AnyWord }          // any string that is not a reserved word...
+
+AnyWord = { ASCII_ALPHA+ }
+
+WordAs = { ^"AS" }
+
+WordWhere = { ^"WHERE" }
+
+WordCreate = { ^"CREATE" }
+
+WordDelete = { ^"DELETE" }
+
+WordMatch = { ^"MATCH" }
+
+WordCall = { ^"CALL" }
+
+WordYield = { ^"YIELD" }
+
+WordReturn = { ^"RETURN" }
+
+WordOrder = { ^"ORDER" }
+
+WordBy = { ^"BY" }
+
+WordSkip = { ^"SKIP" }
+
+WordLimit = { ^"Limit" }
+
+WordASC = { ^"ASC" | ^"ASCENDING" }
+
+WordDESC = { ^"DESC" | ^"DESCENDING" }
+
+ReservedWord = {
+^"ALL"
+| ^"DETACH"
+| ^"EXISTS"
+| ^"LIMIT"
+| ^"MERGE"
+| ^"ON"
+| ^"OPTIONAL"
+| ^"REMOVE"
+| ^"SET"
+| ^"WITH"
+| ^"UNION"
+| ^"UNWIND"
+| ^"AND"
+| ^"CONTAINS"
+| ^"DISTINCT"
+| ^"ENDS"
+| ^"IN"
+| ^"IS"
+| ^"NOT"
+| ^"OR"
+| ^"STARTS"
+| ^"XOR"
+| ^"FALSE"
+| ^"TRUE"
+| ^"NULL"
+| ^"CONSTRAINT"
+| ^"DO"
+| ^"FOR"
+| ^"REQUIRE"
+| ^"UNIQUE"
+| ^"CASE"
+| ^"WHEN"
+| ^"THEN"
+| ^"ELSE"
+| ^"END"
+| ^"MANDATORY"
+| ^"SCALAR"
+| ^"OF"
+| ^"ADD"
+| ^"DROP"
+| WordAs
+| WordCreate
+| WordWhere
+| WordMatch
+| WordCall
+| WordDelete
+| WordYield
+| WordReturn
+| WordOrder
+| WordBy
+| WordSkip
+| WordLimit
+| WordASC
+| WordDESC
+}
+
+LeftArrowHead = {
+	"<"
+}
+
+RightArrowHead = {
+	">"
+}
+
+Dash = {
+	"-"
+}
